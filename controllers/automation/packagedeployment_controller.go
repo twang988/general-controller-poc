@@ -61,6 +61,8 @@ type PackageDeploymentReconciler struct {
 //+kubebuilder:rbac:groups=automation.nephio.org,resources=packagedeployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=automation.nephio.org,resources=packagedeployments/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=automation.nephio.org,resources=packagedeployments/finalizers,verbs=update
+//+kubebuilder:rbac:groups=porch.kpt.dev,resources=packagerevisions;packagerevisionresources,verbs=list;create;update;get
+//+kubebuilder:rbac:groups=infra.nephio.org,resources=clusters;clusterscaleprofiles,verbs=list;watch;get
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
