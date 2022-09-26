@@ -31,3 +31,22 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - porch.kpt.dev
+  resources:
+  - packagerevisions
+  - packagerevisionresources
+  verbs:
+  - list
+  - create
+  - get
+  - update
+- apiGroups:
+  - infra.nephio.org
+  resources:
+  - clusters
+  - clusterscaleprofiles
+  verbs:
+  - list
+  - get
+  - watch

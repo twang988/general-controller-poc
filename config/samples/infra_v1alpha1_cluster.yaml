@@ -33,3 +33,15 @@ metadata:
 scaleProfileName: medium-fixed-site
 repositoryRef:
   name: test-deploy-edge-02
+---
+apiVersion: infra.nephio.org/v1alpha1
+kind: Cluster
+metadata:
+  name: wrcp-dx-02
+  labels:
+    nephio.org/region: cn-wrcp-aiodx
+    nephio.org/site-type: aggregation
+    nephio.org/site: wrcp-02
+scaleProfileName: small-fixed-site
+repositoryRef:
+  name: nephio-edge-cluster-02
