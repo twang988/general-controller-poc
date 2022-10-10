@@ -58,6 +58,16 @@ type PackageDeploymentSpec struct {
 	// The namespace will be added to the resource list of the package
 	// If not present, the package will be installed in the default namespace
 	Namespace *string `json:"namespace,omitempty"`
+
+	// Current for cluster select only
+	InternalFunctions InternalFunction `json:"internalFunctions,omitempty"`
+}
+
+// Internal funcion for clusterselector.
+// can Define more for further general needs
+type InternalFunction struct {
+	ClusterSelector           string `json:"clusterSelector,omitempty"`
+	AnotherFuncForOtherThings string `json:"anotherFuncForOtherThings,omitempty"`
 }
 
 // PackageDeploymentStatus defines the observed state of PackageDeployment

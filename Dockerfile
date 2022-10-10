@@ -9,11 +9,11 @@ COPY go.sum go.sum
 # and so that source changes don't invalidate our downloaded layer
 #RUN go mod download
 
-RUN export https_proxy=http://147.11.252.42:9090 && apk add ca-certificates openssl git
+RUN export https_proxy=http://147.11.252.42:9090 && apk add ca-certificates openssl curl
 ARG cert_location=/usr/local/share/ca-certificates
 RUN openssl s_client -showcerts -connect goproxy.cn:443 </dev/null 2>/dev/null|openssl x509 -outform PEM >  ${cert_location}/goproxy.cn.crt
 RUN update-ca-certificates
-RUN unset https_proxy && export GOPROXY=https://goproxy.cn,direct && go mod download
+RUN unset https_proxy && export GOPROXY=https://goproxy.io,direct && go mod download
 
 # Copy the go source
 COPY main.go main.go

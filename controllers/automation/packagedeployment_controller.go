@@ -19,8 +19,11 @@ package automation
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"time"
 
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/serializer/json"
@@ -34,9 +37,10 @@ import (
 	automationv1alpha1 "github.com/nephio-project/nephio-controller-poc/apis/automation/v1alpha1"
 	infrav1alpha1 "github.com/nephio-project/nephio-controller-poc/apis/infra/v1alpha1"
 
+	"github.com/GoogleContainerTools/kpt-functions-sdk/go/fn"
 	porchv1alpha1 "github.com/GoogleContainerTools/kpt/porch/api/porch/v1alpha1"
+	pfun "github.com/GoogleContainerTools/kpt/porch/func/evaluator"
 	"github.com/nephio-project/nephio-controller-poc/pkg/porch"
-
 	"sigs.k8s.io/kustomize/kyaml/yaml"
 )
 
@@ -77,18 +81,30 @@ func (r *PackageDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	pd, err := r.startRequest(ctx, req)
 
 	// Find the clusters matching the selector
-	selector, err := metav1.LabelSelectorAsSelector(pd.Spec.Selector)
-	if err != nil {
-		r.l.Error(err, "could not create selector", "pd", pd)
-		return ctrl.Result{}, err
-	}
+	//selector, err := metav1.LabelSelectorAsSelector(pd.Spec.Selector)
+	//if err != nil {
+	//	r.l.Error(err, "could not create selector", "pd", pd)
+	//	return ctrl.Result{}, err
+	//}
 
 	var clusterList infrav1alpha1.ClusterList
-	if err := r.List(ctx, &clusterList, client.MatchingLabelsSelector{Selector: selector}); err != nil {
-		r.l.Error(err, "could not list clusters", "selector", selector)
+	//if err := r.List(ctx, &clusterList, client.MatchingLabelsSelector{Selector: selector}); err != nil {
+	//	r.l.Error(err, "could not list clusters", "selector", selector)
+	//	return ctrl.Result{}, err
+	//}
+
+	// List all cluster here, Use function select
+	if err := r.List(ctx, &clusterList); err != nil {
+		r.l.Error(err, "could not list clusters")
 		return ctrl.Result{}, err
 	}
 
+	// Call internal function to select cluster
+	clusterList, err = r.callClusterSelectorFuncFromImg(clusterList, pd)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	r.l.Info("Select cluster[s] from local function call", "clusterList", clusterList)
 	if len(clusterList.Items) == 0 {
 		r.l.Info("No clusters for PackageDeployment", "name", req.NamespacedName)
 		return ctrl.Result{}, nil
@@ -155,6 +171,80 @@ func (r *PackageDeploymentReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	return ctrl.Result{}, nil
 }
 
+func gen_resourcelist(clusterlist infrav1alpha1.ClusterList, pd *automationv1alpha1.PackageDeployment) []byte {
+
+	var objlist fn.KubeObjects
+
+	// construct PackageDeployment into KubeObjects
+	o, _ := fn.NewFromTypedObject(pd)
+	objlist = append(objlist, o)
+
+	// construct cluster into KubeObjects
+	for _, cluster := range clusterlist.Items {
+		o, _ := fn.NewFromTypedObject(cluster)
+		objlist = append(objlist, o)
+	}
+
+	rslist := new(fn.ResourceList)
+	// create NewEmptyKubeObject here to avoid nil pointer of .ToYAML()
+	rslist.FunctionConfig = fn.NewEmptyKubeObject()
+	rslist.Items = objlist
+	rsyml, _ := rslist.ToYAML()
+	return rsyml
+
+}
+func (r *PackageDeploymentReconciler) gen_clusterlist(resourcelst []byte, pd *automationv1alpha1.PackageDeployment) infrav1alpha1.ClusterList {
+	var selected_clusterlist infrav1alpha1.ClusterList
+
+	o, err := fn.ParseResourceList(resourcelst)
+	if err != nil {
+		r.l.Error(err, "could not parse resources")
+		return selected_clusterlist
+	}
+
+	for _, cluster := range o.Items {
+		var newcluster infrav1alpha1.Cluster
+		if err := cluster.As(&newcluster); err != nil {
+			fmt.Printf("could not parse cluster [%+v]\n", cluster)
+			return selected_clusterlist
+		}
+		if newcluster.Namespace == "" {
+			newcluster.Namespace = "default"
+		}
+		selected_clusterlist.Items = append(selected_clusterlist.Items, newcluster)
+	}
+	return selected_clusterlist
+}
+
+func (r *PackageDeploymentReconciler) callClusterSelectorFuncFromImg(clusterlist infrav1alpha1.ClusterList, pd *automationv1alpha1.PackageDeployment) (infrav1alpha1.ClusterList, error) {
+
+	// code refer kpt/porch/func/client/main.go
+	var selected_clusterlist infrav1alpha1.ClusterList
+	// Hardcode here only for poc
+	address := "function-runner.porch-system:9445"
+	cc, err := grpc.Dial(address, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return selected_clusterlist, fmt.Errorf("failed to connect to %s: %w", address, err)
+	}
+	defer cc.Close()
+
+	evaluator := pfun.NewFunctionEvaluatorClient(cc)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+
+	rl := gen_resourcelist(clusterlist, pd)
+	in := &pfun.EvaluateFunctionRequest{
+		ResourceList: rl,
+		Image:        pd.Spec.InternalFunctions.ClusterSelector,
+	}
+	resp, err := evaluator.EvaluateFunction(ctx, in)
+	if err != nil {
+		return selected_clusterlist, fmt.Errorf("function evaluation failed: %w", err)
+	}
+
+	selected_clusterlist = r.gen_clusterlist(resp.ResourceList, pd)
+	return selected_clusterlist, nil
+}
 func (r *PackageDeploymentReconciler) applyPackageMutations(ctx context.Context,
 	targetNS string,
 	c *infrav1alpha1.Cluster,

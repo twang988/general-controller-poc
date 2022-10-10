@@ -42,6 +42,6 @@ metadata:
     nephio.org/region: cn-wrcp-aiodx
     nephio.org/site-type: aggregation
     nephio.org/site: wrcp-02
-scaleProfileName: small-fixed-site
+scaleProfileName: large-autoscaling-site
 repositoryRef:
   name: nephio-edge-cluster-02

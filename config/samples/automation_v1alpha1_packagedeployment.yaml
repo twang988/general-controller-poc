@@ -7,6 +7,9 @@ spec:
     matchLabels:
       nephio.org/region: cn-wrcp-aiodx
       nephio.org/site-type: aggregation
+  internalFunctions:
+    clusterSelector: wang5150753/clusterselector-func:1.0
+
   namespace: caching-dns
   packageRef:
     repository: nephio-packages
