@@ -10,3 +10,10 @@ make docker-build
 ```
 make docker-push
 ```
+
+## Apply CRDs and Deploy controller
+> NOTE: Make sure your kubectl cmd is executable  
+> and target k8s cluster CRED is in ~/.kube/config
+```
+make deploy
+```
